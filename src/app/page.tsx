@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import type { Investor } from "@/lib/types";
 import type { MatchResponse } from "@/lib/api-types";
 import { mandateSummary } from "@/lib/mandate-summary";
@@ -109,6 +109,8 @@ export default function Home() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [compareTipDismissed, setCompareTipDismissed] = useState(false);
+  const [mandateFilter, setMandateFilter] = useState("");
+  const [expandedIds, setExpandedIds] = useState<string[]>([]);
 
   useEffect(() => {
     fetch("/api/investors")
@@ -132,7 +134,9 @@ export default function Home() {
         body: JSON.stringify({ investorId, topN: 8 }),
       });
       if (!res.ok) throw new Error((await res.json()).error ?? "Match failed");
-      setResult(await res.json());
+      const data: MatchResponse = await res.json();
+      setResult(data);
+      setExpandedIds(data.matches.slice(0, 2).map((m) => m.parcel.parcel_id));
     } catch (e) {
       setError(e instanceof Error ? e.message : "Something went wrong.");
     } finally {
@@ -151,11 +155,55 @@ export default function Home() {
   }
 
   const inv = investors.find((i) => i.investor_id === selected);
+  const filteredInvestors = useMemo(() => {
+    const q = mandateFilter.trim().toLowerCase();
+    if (!q) return investors;
+    return investors.filter((i) =>
+      [
+        i.investor_id,
+        i.investor_type,
+        i.preferred_sector,
+        i.preferred_district,
+        i.risk_profile,
+        i.investment_horizon,
+        i.capital_range_aed,
+      ].some((field) => field.toLowerCase().includes(q)),
+    );
+  }, [investors, mandateFilter]);
+
+  useEffect(() => {
+    if (!filteredInvestors.length) return;
+    if (!filteredInvestors.some((i) => i.investor_id === selected)) {
+      setSelected(filteredInvestors[0].investor_id);
+    }
+  }, [filteredInvestors, selected]);
+
   const activeStep = result ? 3 : loading ? 2 : 1;
   const showCompareTip =
     result &&
     selected !== COMPARE_INVESTOR_ID &&
     !compareTipDismissed;
+  const allBreakdownsExpanded =
+    !!result && expandedIds.length === result.matches.length;
+
+  function toggleExpanded(parcelId: string, open: boolean) {
+    setExpandedIds((prev) =>
+      open
+        ? prev.includes(parcelId)
+          ? prev
+          : [...prev, parcelId]
+        : prev.filter((id) => id !== parcelId),
+    );
+  }
+
+  function toggleAllBreakdowns() {
+    if (!result) return;
+    if (allBreakdownsExpanded) {
+      setExpandedIds(result.matches.slice(0, 2).map((m) => m.parcel.parcel_id));
+      return;
+    }
+    setExpandedIds(result.matches.map((m) => m.parcel.parcel_id));
+  }
 
   return (
     <main
@@ -233,7 +281,33 @@ export default function Home() {
           >
             <label style={{ display: "grid", gap: 6, flex: "1 1 260px" }}>
               <span style={{ fontSize: 12, color: "var(--text-dim)" }}>
+                Filter mandates
+              </span>
+              <input
+                type="search"
+                value={mandateFilter}
+                onChange={(e) => setMandateFilter(e.target.value)}
+                placeholder="ID, sector, district, risk…"
+                style={{
+                  background: "var(--ink)",
+                  color: "var(--text)",
+                  border: "1px solid var(--ink-line)",
+                  borderRadius: "var(--radius)",
+                  padding: "10px 12px",
+                  fontSize: 14,
+                }}
+              />
+            </label>
+            <label style={{ display: "grid", gap: 6, flex: "1 1 260px" }}>
+              <span style={{ fontSize: 12, color: "var(--text-dim)" }}>
                 Investor mandate
+                {mandateFilter.trim() ? (
+                  <span style={{ color: "var(--text-faint)" }}>
+                    {" "}
+                    · {filteredInvestors.length} match
+                    {filteredInvestors.length === 1 ? "" : "es"}
+                  </span>
+                ) : null}
               </span>
               <select
                 value={selected}
@@ -241,6 +315,7 @@ export default function Home() {
                   setSelected(e.target.value);
                   setCompareTipDismissed(false);
                 }}
+                disabled={!filteredInvestors.length}
                 style={{
                   background: "var(--ink)",
                   color: "var(--text)",
@@ -249,9 +324,10 @@ export default function Home() {
                   padding: "10px 12px",
                   fontSize: 14,
                   fontFamily: "var(--font-mono)",
+                  opacity: filteredInvestors.length ? 1 : 0.6,
                 }}
               >
-                {investors.map((i) => (
+                {filteredInvestors.map((i) => (
                   <option key={i.investor_id} value={i.investor_id}>
                     {i.investor_id} — {i.investor_type} · {i.preferred_sector}{" "}
                     · {i.preferred_district}
@@ -293,6 +369,27 @@ export default function Home() {
               </button>
             </div>
           </div>
+
+          {loading && (
+            <div style={{ display: "grid", gap: 8 }}>
+              <p style={{ fontSize: 13, color: "var(--text-dim)" }}>
+                Scoring 600 parcels against this mandate and drafting the analyst
+                briefing…
+              </p>
+              <div
+                role="progressbar"
+                aria-label="Matching in progress"
+                style={{
+                  height: 4,
+                  borderRadius: 2,
+                  overflow: "hidden",
+                  background: "var(--ink-line-soft)",
+                }}
+              >
+                <div className="match-progress-bar" />
+              </div>
+            </div>
+          )}
 
           {inv && (
             <>
@@ -486,13 +583,38 @@ export default function Home() {
             <h2 style={{ fontSize: 13, fontWeight: 600, color: "var(--text-dim)" }}>
               Step 3 — Ranked parcels
             </h2>
-            <span
-              className="mono"
-              style={{ fontSize: 12, color: "var(--text-faint)" }}
+            <div
+              style={{
+                display: "flex",
+                gap: 12,
+                alignItems: "center",
+                flexWrap: "wrap",
+              }}
             >
-              budget {fmtAed(result.capitalMin)} – {fmtAed(result.capitalMax)} ·
-              80+ = strong fit
-            </span>
+              <button
+                type="button"
+                onClick={toggleAllBreakdowns}
+                style={{
+                  background: "transparent",
+                  color: "var(--text-dim)",
+                  border: "1px solid var(--ink-line)",
+                  borderRadius: "var(--radius)",
+                  padding: "6px 12px",
+                  fontSize: 12,
+                }}
+              >
+                {allBreakdownsExpanded
+                  ? "Collapse to top 2"
+                  : "Show all breakdowns"}
+              </button>
+              <span
+                className="mono"
+                style={{ fontSize: 12, color: "var(--text-faint)" }}
+              >
+                budget {fmtAed(result.capitalMin)} – {fmtAed(result.capitalMax)} ·
+                80+ = strong fit
+              </span>
+            </div>
           </div>
           {result.matches.map((m, i) => (
             <ParcelCard
@@ -500,6 +622,8 @@ export default function Home() {
               match={m}
               rank={i + 1}
               showFactorHelper={i === 0}
+              open={expandedIds.includes(m.parcel.parcel_id)}
+              onOpenChange={(open) => toggleExpanded(m.parcel.parcel_id, open)}
             />
           ))}
         </section>

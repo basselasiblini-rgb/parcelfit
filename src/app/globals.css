@@ -45,7 +45,8 @@ button {
 }
 
 button:focus-visible,
-select:focus-visible {
+select:focus-visible,
+input:focus-visible {
   outline: 2px solid var(--sand);
   outline-offset: 2px;
 }
@@ -54,5 +55,29 @@ select:focus-visible {
   * {
     animation-duration: 0.01ms !important;
     transition-duration: 0.01ms !important;
+  }
+}
+
+@keyframes match-progress {
+  0% {
+    transform: translateX(-100%);
+  }
+  100% {
+    transform: translateX(350%);
+  }
+}
+
+.match-progress-bar {
+  height: 100%;
+  width: 32%;
+  background: var(--sand);
+  animation: match-progress 1.4s ease-in-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .match-progress-bar {
+    animation: none;
+    width: 100%;
+    opacity: 0.45;
   }
 }
