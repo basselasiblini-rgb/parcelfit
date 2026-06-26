@@ -1,0 +1,58 @@
+:root {
+  /* Palette: Abu Dhabi land desk — ink ground, amber-sand accent, green signal */
+  --ink: #0b0e14;
+  --ink-raised: #121724;
+  --ink-line: #1f2738;
+  --ink-line-soft: #182032;
+  --text: #e6ebf2;
+  --text-dim: #8a94a8;
+  --text-faint: #5a6478;
+  --sand: #e8a24a;
+  --sand-dim: #b9823c;
+  --signal: #4ade80;
+  --signal-dim: #2f9e5a;
+  --warn: #f0823a;
+  --radius: 6px;
+
+  --font-sans: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
+    system-ui, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, "SF Mono", "Cascadia Code",
+    Menlo, Consolas, monospace;
+}
+
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+html,
+body {
+  background: var(--ink);
+  color: var(--text);
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+  line-height: 1.5;
+}
+
+.mono {
+  font-family: var(--font-mono);
+}
+
+button {
+  font-family: inherit;
+  cursor: pointer;
+}
+
+button:focus-visible,
+select:focus-visible {
+  outline: 2px solid var(--sand);
+  outline-offset: 2px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  * {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
+}
