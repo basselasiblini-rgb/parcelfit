@@ -42,11 +42,15 @@ export async function POST(req: NextRequest) {
       generatedAt: new Date().toISOString(),
     };
 
-    const rationale = withRationale
+    const rationaleResult = withRationale
       ? await generateRationale({ investor, matches })
       : null;
 
-    return NextResponse.json({ ...result, rationale });
+    return NextResponse.json({
+      ...result,
+      rationale: rationaleResult?.text ?? null,
+      rationaleSource: rationaleResult?.source ?? null,
+    });
   } catch (err) {
     console.error("match error", err);
     return NextResponse.json(

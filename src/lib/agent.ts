@@ -29,6 +29,13 @@ export interface RationaleInput {
   matches: ParcelMatch[];
 }
 
+export type RationaleSource = "ai" | "fallback";
+
+export interface RationaleResult {
+  text: string;
+  source: RationaleSource;
+}
+
 function buildUserMessage({ investor, matches }: RationaleInput): string {
   const mandate = [
     `Investor ${investor.investor_id} — ${investor.investor_type}`,
@@ -60,35 +67,43 @@ function buildUserMessage({ investor, matches }: RationaleInput): string {
   return `INVESTOR MANDATE\n${mandate}\n\nRANKED SHORTLIST\n${shortlist}\n\nWrite the committee briefing.`;
 }
 
-export async function generateRationale(input: RationaleInput): Promise<string> {
+export async function generateRationale(
+  input: RationaleInput,
+): Promise<RationaleResult> {
   const apiKey = process.env.ANTHROPIC_API_KEY;
   if (!apiKey) {
-    // Graceful degradation: the app still works as a matching tool without a key.
-    return fallbackRationale(input);
+    return { text: fallbackRationale(input), source: "fallback" };
   }
 
-  const client = new Anthropic({ apiKey });
-  const message = await client.messages.create({
-    model: "claude-sonnet-4-6",
-    max_tokens: 700,
-    // Cache the system prompt: every request after the first is far cheaper.
-    // Cast covers SDK versions whose TextBlockParam type omits cache_control.
-    system: [
-      {
-        type: "text",
-        text: SYSTEM_PROMPT,
-        cache_control: { type: "ephemeral" },
-      },
-    ] as unknown as Anthropic.MessageCreateParams["system"],
-    messages: [{ role: "user", content: buildUserMessage(input) }],
-  });
+  try {
+    const client = new Anthropic({ apiKey });
+    const message = await client.messages.create({
+      model: "claude-sonnet-4-6",
+      max_tokens: 700,
+      // Cache the system prompt: every request after the first is far cheaper.
+      // Cast covers SDK versions whose TextBlockParam type omits cache_control.
+      system: [
+        {
+          type: "text",
+          text: SYSTEM_PROMPT,
+          cache_control: { type: "ephemeral" },
+        },
+      ] as unknown as Anthropic.MessageCreateParams["system"],
+      messages: [{ role: "user", content: buildUserMessage(input) }],
+    });
 
-  const text = message.content
-    .map((block) => (block.type === "text" ? block.text : ""))
-    .filter(Boolean)
-    .join("\n");
+    const text = message.content
+      .map((block) => (block.type === "text" ? block.text : ""))
+      .filter(Boolean)
+      .join("\n");
 
-  return text || fallbackRationale(input);
+    if (!text) {
+      return { text: fallbackRationale(input), source: "fallback" };
+    }
+    return { text, source: "ai" };
+  } catch {
+    return { text: fallbackRationale(input), source: "fallback" };
+  }
 }
 
 // Deterministic fallback so the demo never shows an empty panel if the API is down
@@ -110,5 +125,5 @@ function fallbackRationale({ investor, matches }: RationaleInput): string {
   const caveat = top.flags.length
     ? ` Caveat: ${top.flags.join("; ")}.`
     : "";
-  return `${verdict}\n\n${lead} ${reasons}${caveat}\n\n(Rationale generated without the language model — set ANTHROPIC_API_KEY for the full analyst briefing.)`;
+  return `${verdict}\n\n${lead} ${reasons}${caveat}`;
 }

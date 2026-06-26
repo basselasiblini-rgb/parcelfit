@@ -4,9 +4,28 @@ import type { MatchFactor } from "@/lib/types";
 
 // The signature element: a parcel's score decomposed into its weighted factors,
 // so the committee can see exactly why a parcel ranked where it did.
-export function FactorBars({ factors }: { factors: MatchFactor[] }) {
+export function FactorBars({
+  factors,
+  showHelper,
+}: {
+  factors: MatchFactor[];
+  showHelper?: boolean;
+}) {
   return (
     <div style={{ display: "grid", gap: 8 }}>
+      {showHelper && (
+        <p
+          style={{
+            fontSize: 11.5,
+            color: "var(--text-faint)",
+            lineHeight: 1.45,
+            paddingBottom: 4,
+          }}
+        >
+          Each row: factor fit × weight = points toward the 100 score. Numbers are
+          computed in code, not by the AI briefing.
+        </p>
+      )}
       {factors.map((f) => {
         const pct = Math.round(f.score * 100);
         const contribution = Math.round(f.score * f.weight * 100);

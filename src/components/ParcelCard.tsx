@@ -17,8 +17,28 @@ const STATUS_LABEL: Record<string, string> = {
   developed: "Developed",
 };
 
-export function ParcelCard({ match, rank }: { match: ParcelMatch; rank: number }) {
-  const [open, setOpen] = useState(rank <= 2); // top 2 expanded by default
+export function ParcelCard({
+  match,
+  rank,
+  showFactorHelper,
+  open,
+  onOpenChange,
+}: {
+  match: ParcelMatch;
+  rank: number;
+  showFactorHelper?: boolean;
+  open?: boolean;
+  onOpenChange?: (open: boolean) => void;
+}) {
+  const [internalOpen, setInternalOpen] = useState(rank <= 2);
+  const isControlled = open !== undefined;
+  const isOpen = isControlled ? open : internalOpen;
+
+  function toggleOpen() {
+    const next = !isOpen;
+    if (isControlled) onOpenChange?.(next);
+    else setInternalOpen(next);
+  }
   const p = match.parcel;
   const strong = match.total >= 80;
 
@@ -33,7 +53,7 @@ export function ParcelCard({ match, rank }: { match: ParcelMatch; rank: number }
       }}
     >
       <button
-        onClick={() => setOpen((o) => !o)}
+        onClick={toggleOpen}
         style={{
           width: "100%",
           background: "transparent",
@@ -46,7 +66,7 @@ export function ParcelCard({ match, rank }: { match: ParcelMatch; rank: number }
           alignItems: "center",
           textAlign: "left",
         }}
-        aria-expanded={open}
+        aria-expanded={isOpen}
       >
         <span
           className="mono"
@@ -120,7 +140,7 @@ export function ParcelCard({ match, rank }: { match: ParcelMatch; rank: number }
         </div>
       )}
 
-      {open && (
+      {isOpen && (
         <div
           style={{
             padding: "12px 16px 16px",
@@ -144,7 +164,7 @@ export function ParcelCard({ match, rank }: { match: ParcelMatch; rank: number }
             <span>dev-potential {p.development_potential_score}</span>
             <span>rec: {p.recommended_use.replace(/_/g, " ")}</span>
           </div>
-          <FactorBars factors={match.factors} />
+          <FactorBars factors={match.factors} showHelper={showFactorHelper} />
         </div>
       )}
     </article>

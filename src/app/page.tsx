@@ -3,7 +3,12 @@
 import { useEffect, useState } from "react";
 import type { Investor } from "@/lib/types";
 import type { MatchResponse } from "@/lib/api-types";
+import { mandateSummary } from "@/lib/mandate-summary";
 import { ParcelCard } from "@/components/ParcelCard";
+import { ScoringLegend } from "@/components/ScoringLegend";
+
+const DEMO_INVESTOR_ID = "INV-003";
+const COMPARE_INVESTOR_ID = "INV-004";
 
 function fmtAed(n: number): string {
   if (n >= 1_000_000_000) return `AED ${(n / 1_000_000_000).toFixed(2)}B`;
@@ -13,7 +18,14 @@ function fmtAed(n: number): string {
 
 const MandateChip = ({ k, v }: { k: string; v: string }) => (
   <span style={{ display: "grid", gap: 2 }}>
-    <span style={{ fontSize: 10, color: "var(--text-faint)", textTransform: "uppercase", letterSpacing: 0.5 }}>
+    <span
+      style={{
+        fontSize: 10,
+        color: "var(--text-faint)",
+        textTransform: "uppercase",
+        letterSpacing: 0.5,
+      }}
+    >
       {k}
     </span>
     <span className="mono" style={{ fontSize: 13, color: "var(--text)" }}>
@@ -22,12 +34,81 @@ const MandateChip = ({ k, v }: { k: string; v: string }) => (
   </span>
 );
 
+function StepBadge({
+  n,
+  label,
+  active,
+}: {
+  n: number;
+  label: string;
+  active?: boolean;
+}) {
+  return (
+    <span
+      style={{
+        display: "flex",
+        alignItems: "center",
+        gap: 8,
+        minWidth: 0,
+      }}
+    >
+      <span
+        style={{
+          width: 22,
+          height: 22,
+          borderRadius: 9999,
+          display: "inline-flex",
+          alignItems: "center",
+          justifyContent: "center",
+          fontSize: 11,
+          fontWeight: 600,
+          flexShrink: 0,
+          background: active ? "var(--sand)" : "var(--ink-line)",
+          color: active ? "var(--ink)" : "var(--text-dim)",
+        }}
+      >
+        {n}
+      </span>
+      <span
+        style={{
+          fontSize: 12.5,
+          color: active ? "var(--text)" : "var(--text-dim)",
+        }}
+      >
+        {label}
+      </span>
+    </span>
+  );
+}
+
+function ProvenanceBadge({ source }: { source: "ai" | "fallback" }) {
+  const isAi = source === "ai";
+  return (
+    <span
+      style={{
+        fontSize: 10,
+        fontWeight: 600,
+        letterSpacing: 0.3,
+        textTransform: "uppercase",
+        padding: "3px 8px",
+        borderRadius: 4,
+        border: `1px solid ${isAi ? "var(--signal-dim)" : "var(--ink-line)"}`,
+        color: isAi ? "var(--signal)" : "var(--text-faint)",
+        background: isAi ? "rgba(74, 222, 128, 0.08)" : "transparent",
+      }}
+    >
+      {isAi ? "AI analyst" : "Offline fallback"}
+    </span>
+  );
+}
+
 export default function Home() {
   const [investors, setInvestors] = useState<Investor[]>([]);
   const [selected, setSelected] = useState<string>("");
   const [result, setResult] = useState<MatchResponse | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [compareTipDismissed, setCompareTipDismissed] = useState(false);
 
   useEffect(() => {
     fetch("/api/investors")
@@ -39,8 +120,8 @@ export default function Home() {
       .catch(() => setError("Could not load investor mandates."));
   }, []);
 
-  async function runMatch() {
-    if (!selected) return;
+  async function runMatchFor(investorId: string) {
+    if (!investorId) return;
     setLoading(true);
     setError(null);
     setResult(null);
@@ -48,7 +129,7 @@ export default function Home() {
       const res = await fetch("/api/match", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ investorId: selected, topN: 8 }),
+        body: JSON.stringify({ investorId, topN: 8 }),
       });
       if (!res.ok) throw new Error((await res.json()).error ?? "Match failed");
       setResult(await res.json());
@@ -59,7 +140,22 @@ export default function Home() {
     }
   }
 
+  async function runMatch() {
+    await runMatchFor(selected);
+  }
+
+  async function runDemo() {
+    setSelected(DEMO_INVESTOR_ID);
+    setCompareTipDismissed(false);
+    await runMatchFor(DEMO_INVESTOR_ID);
+  }
+
   const inv = investors.find((i) => i.investor_id === selected);
+  const activeStep = result ? 3 : loading ? 2 : 1;
+  const showCompareTip =
+    result &&
+    selected !== COMPARE_INVESTOR_ID &&
+    !compareTipDismissed;
 
   return (
     <main
@@ -89,149 +185,337 @@ export default function Home() {
         </p>
       </header>
 
-      {/* Mandate picker */}
-      <section
+      <div
         style={{
-          background: "var(--ink-raised)",
-          border: "1px solid var(--ink-line)",
-          borderRadius: "var(--radius)",
-          padding: 16,
           display: "grid",
-          gap: 14,
+          gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))",
+          gap: 12,
+          padding: "12px 14px",
+          border: "1px solid var(--ink-line-soft)",
+          borderRadius: "var(--radius)",
+          background: "var(--ink-raised)",
         }}
       >
-        <div style={{ display: "flex", gap: 10, flexWrap: "wrap", alignItems: "end" }}>
-          <label style={{ display: "grid", gap: 6, flex: "1 1 260px" }}>
-            <span style={{ fontSize: 12, color: "var(--text-dim)" }}>
-              Investor mandate
-            </span>
-            <select
-              value={selected}
-              onChange={(e) => setSelected(e.target.value)}
-              style={{
-                background: "var(--ink)",
-                color: "var(--text)",
-                border: "1px solid var(--ink-line)",
-                borderRadius: "var(--radius)",
-                padding: "10px 12px",
-                fontSize: 14,
-                fontFamily: "var(--font-mono)",
-              }}
-            >
-              {investors.map((i) => (
-                <option key={i.investor_id} value={i.investor_id}>
-                  {i.investor_id} — {i.investor_type} · {i.preferred_sector} ·{" "}
-                  {i.preferred_district}
-                </option>
-              ))}
-            </select>
-          </label>
-          <button
-            onClick={runMatch}
-            disabled={loading || !selected}
-            style={{
-              background: "var(--sand)",
-              color: "var(--ink)",
-              border: "none",
-              borderRadius: "var(--radius)",
-              padding: "10px 22px",
-              fontSize: 14,
-              fontWeight: 600,
-              opacity: loading ? 0.6 : 1,
-            }}
-          >
-            {loading ? "Matching…" : "Find parcels"}
-          </button>
-        </div>
+        <StepBadge n={1} label="Choose mandate" active={activeStep === 1} />
+        <StepBadge
+          n={2}
+          label="Score all 600 parcels"
+          active={activeStep === 2}
+        />
+        <StepBadge
+          n={3}
+          label="Briefing + ranked list"
+          active={activeStep === 3}
+        />
+      </div>
 
-        {inv && (
+      <section style={{ display: "grid", gap: 10 }}>
+        <h2 style={{ fontSize: 13, fontWeight: 600, color: "var(--text-dim)" }}>
+          Step 1 — Mandate
+        </h2>
+        <div
+          style={{
+            background: "var(--ink-raised)",
+            border: "1px solid var(--ink-line)",
+            borderRadius: "var(--radius)",
+            padding: 16,
+            display: "grid",
+            gap: 14,
+          }}
+        >
           <div
             style={{
               display: "flex",
-              gap: 22,
+              gap: 10,
               flexWrap: "wrap",
-              paddingTop: 12,
-              borderTop: "1px solid var(--ink-line-soft)",
+              alignItems: "end",
             }}
           >
-            <MandateChip k="type" v={inv.investor_type} />
-            <MandateChip k="sector" v={inv.preferred_sector} />
-            <MandateChip k="district" v={inv.preferred_district} />
-            <MandateChip k="capital" v={inv.capital_range_aed} />
-            <MandateChip k="risk" v={inv.risk_profile} />
-            <MandateChip k="horizon" v={inv.investment_horizon} />
+            <label style={{ display: "grid", gap: 6, flex: "1 1 260px" }}>
+              <span style={{ fontSize: 12, color: "var(--text-dim)" }}>
+                Investor mandate
+              </span>
+              <select
+                value={selected}
+                onChange={(e) => {
+                  setSelected(e.target.value);
+                  setCompareTipDismissed(false);
+                }}
+                style={{
+                  background: "var(--ink)",
+                  color: "var(--text)",
+                  border: "1px solid var(--ink-line)",
+                  borderRadius: "var(--radius)",
+                  padding: "10px 12px",
+                  fontSize: 14,
+                  fontFamily: "var(--font-mono)",
+                }}
+              >
+                {investors.map((i) => (
+                  <option key={i.investor_id} value={i.investor_id}>
+                    {i.investor_id} — {i.investor_type} · {i.preferred_sector}{" "}
+                    · {i.preferred_district}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+              <button
+                onClick={runMatch}
+                disabled={loading || !selected}
+                style={{
+                  background: "var(--sand)",
+                  color: "var(--ink)",
+                  border: "none",
+                  borderRadius: "var(--radius)",
+                  padding: "10px 22px",
+                  fontSize: 14,
+                  fontWeight: 600,
+                  opacity: loading ? 0.6 : 1,
+                }}
+              >
+                {loading ? "Scoring 600 parcels…" : "Find parcels"}
+              </button>
+              <button
+                onClick={runDemo}
+                disabled={loading}
+                style={{
+                  background: "transparent",
+                  color: "var(--text-dim)",
+                  border: "1px solid var(--ink-line)",
+                  borderRadius: "var(--radius)",
+                  padding: "10px 16px",
+                  fontSize: 14,
+                  opacity: loading ? 0.6 : 1,
+                }}
+              >
+                Try demo ({DEMO_INVESTOR_ID})
+              </button>
+            </div>
           </div>
-        )}
+
+          {inv && (
+            <>
+              <p
+                style={{
+                  fontSize: 13.5,
+                  lineHeight: 1.5,
+                  color: "var(--text-dim)",
+                }}
+              >
+                {mandateSummary(inv)}
+              </p>
+              <div
+                style={{
+                  display: "flex",
+                  gap: 22,
+                  flexWrap: "wrap",
+                  paddingTop: 12,
+                  borderTop: "1px solid var(--ink-line-soft)",
+                }}
+              >
+                <MandateChip k="type" v={inv.investor_type} />
+                <MandateChip k="sector" v={inv.preferred_sector} />
+                <MandateChip k="district" v={inv.preferred_district} />
+                <MandateChip k="capital" v={inv.capital_range_aed} />
+                <MandateChip k="risk" v={inv.risk_profile} />
+                <MandateChip k="horizon" v={inv.investment_horizon} />
+              </div>
+            </>
+          )}
+        </div>
       </section>
+
+      <ScoringLegend />
 
       {error && (
         <p style={{ color: "var(--warn)", fontSize: 14 }}>{error}</p>
       )}
 
-      {/* AI briefing */}
-      {result?.rationale && (
-        <section
+      {!result && !loading && (
+        <div
           style={{
-            background:
-              "linear-gradient(180deg, rgba(232,162,74,0.06), transparent)",
-            border: "1px solid var(--ink-line)",
+            padding: "16px 18px",
+            border: "1px dashed var(--ink-line)",
             borderRadius: "var(--radius)",
-            padding: 18,
             display: "grid",
             gap: 8,
           }}
         >
-          <span
-            className="mono"
-            style={{ fontSize: 11, color: "var(--sand)", letterSpacing: 1 }}
-          >
-            ANALYST BRIEFING
-          </span>
-          <p
+          <p style={{ fontSize: 14, color: "var(--text-dim)", lineHeight: 1.55 }}>
+            Select a mandate above, then run a match. ParcelFit scores every parcel
+            in the dataset, ranks the top eight, and writes a committee briefing
+            you can audit factor by factor.
+          </p>
+          <p style={{ fontSize: 13, color: "var(--text-faint)" }}>
+            New here? Click{" "}
+            <strong style={{ color: "var(--sand)", fontWeight: 600 }}>
+              Try demo ({DEMO_INVESTOR_ID})
+            </strong>{" "}
+            for a balanced, short-horizon mandate — then switch to{" "}
+            <span className="mono">{COMPARE_INVESTOR_ID}</span> to see vacant
+            high-potential parcels rise for an aggressive profile.
+          </p>
+        </div>
+      )}
+
+      {result?.rationale && (
+        <section style={{ display: "grid", gap: 10 }}>
+          <div
             style={{
-              fontSize: 14.5,
-              lineHeight: 1.6,
-              color: "var(--text)",
-              whiteSpace: "pre-wrap",
+              display: "flex",
+              alignItems: "center",
+              gap: 10,
+              flexWrap: "wrap",
             }}
           >
-            {result.rationale}
-          </p>
+            <h2
+              style={{ fontSize: 13, fontWeight: 600, color: "var(--text-dim)" }}
+            >
+              Step 2 — Analyst briefing
+            </h2>
+            {result.rationaleSource && (
+              <ProvenanceBadge source={result.rationaleSource} />
+            )}
+          </div>
+          <div
+            style={{
+              background:
+                "linear-gradient(180deg, rgba(232,162,74,0.06), transparent)",
+              border: "1px solid var(--ink-line)",
+              borderRadius: "var(--radius)",
+              padding: 18,
+              display: "grid",
+              gap: 8,
+            }}
+          >
+            <span
+              className="mono"
+              style={{ fontSize: 11, color: "var(--sand)", letterSpacing: 1 }}
+            >
+              ANALYST BRIEFING
+            </span>
+            <p
+              style={{
+                fontSize: 14.5,
+                lineHeight: 1.6,
+                color: "var(--text)",
+                whiteSpace: "pre-wrap",
+              }}
+            >
+              {result.rationale}
+            </p>
+            {result.rationaleSource === "fallback" && (
+              <p style={{ fontSize: 12, color: "var(--text-faint)" }}>
+                Set <span className="mono">ANTHROPIC_API_KEY</span> for the full
+                AI analyst briefing on Vercel.
+              </p>
+            )}
+          </div>
         </section>
       )}
 
-      {/* Ranked parcels */}
+      {showCompareTip && (
+        <div
+          style={{
+            display: "flex",
+            gap: 12,
+            alignItems: "start",
+            justifyContent: "space-between",
+            padding: "12px 14px",
+            border: "1px solid var(--ink-line)",
+            borderRadius: "var(--radius)",
+            background: "var(--ink-raised)",
+          }}
+        >
+          <p style={{ fontSize: 13, color: "var(--text-dim)", lineHeight: 1.5 }}>
+            <strong style={{ color: "var(--text)", fontWeight: 600 }}>Tip:</strong>{" "}
+            re-run with{" "}
+            <button
+              type="button"
+              onClick={() => {
+                setSelected(COMPARE_INVESTOR_ID);
+                void runMatchFor(COMPARE_INVESTOR_ID);
+              }}
+              style={{
+                background: "none",
+                border: "none",
+                padding: 0,
+                color: "var(--sand)",
+                fontFamily: "var(--font-mono)",
+                fontSize: 13,
+                textDecoration: "underline",
+                cursor: "pointer",
+              }}
+            >
+              {COMPARE_INVESTOR_ID}
+            </button>{" "}
+            (aggressive, long horizon) to see vacant parcels with high development
+            potential rise — same engine, opposite mandate.
+          </p>
+          <button
+            type="button"
+            onClick={() => setCompareTipDismissed(true)}
+            aria-label="Dismiss tip"
+            style={{
+              background: "transparent",
+              border: "none",
+              color: "var(--text-faint)",
+              fontSize: 18,
+              lineHeight: 1,
+              padding: "0 4px",
+              flexShrink: 0,
+            }}
+          >
+            ×
+          </button>
+        </div>
+      )}
+
       {result && (
         <section style={{ display: "grid", gap: 12 }}>
           <div
             style={{
               display: "flex",
               justifyContent: "space-between",
-              alignItems: "baseline",
+              alignItems: "end",
+              gap: 12,
+              flexWrap: "wrap",
             }}
           >
-            <h2 style={{ fontSize: 16, fontWeight: 600 }}>
-              Ranked parcels
+            <h2 style={{ fontSize: 13, fontWeight: 600, color: "var(--text-dim)" }}>
+              Step 3 — Ranked parcels
             </h2>
             <span
               className="mono"
               style={{ fontSize: 12, color: "var(--text-faint)" }}
             >
-              budget {fmtAed(result.capitalMin)} – {fmtAed(result.capitalMax)}
+              budget {fmtAed(result.capitalMin)} – {fmtAed(result.capitalMax)} ·
+              80+ = strong fit
             </span>
           </div>
           {result.matches.map((m, i) => (
-            <ParcelCard key={m.parcel.parcel_id} match={m} rank={i + 1} />
+            <ParcelCard
+              key={m.parcel.parcel_id}
+              match={m}
+              rank={i + 1}
+              showFactorHelper={i === 0}
+            />
           ))}
         </section>
       )}
 
-      {!result && !loading && (
-        <p style={{ color: "var(--text-faint)", fontSize: 14 }}>
-          Pick a mandate and run a match to see ranked parcels with a full
-          factor breakdown.
+      <footer
+        style={{
+          paddingTop: 8,
+          borderTop: "1px solid var(--ink-line-soft)",
+        }}
+      >
+        <p style={{ fontSize: 12, color: "var(--text-faint)", lineHeight: 1.5 }}>
+          Challenge dataset · 200 investor mandates × 600 Abu Dhabi land parcels ·
+          synthetic values for demonstration.
         </p>
-      )}
+      </footer>
     </main>
   );
 }
