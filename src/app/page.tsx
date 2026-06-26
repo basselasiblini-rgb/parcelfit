@@ -370,6 +370,13 @@ export default function Home() {
             </div>
           </div>
 
+          <p style={{ fontSize: 12.5, color: "var(--text-faint)", marginTop: -2 }}>
+            Tip: run a match, then switch to a mandate with a different risk
+            profile (e.g. an aggressive one) and run again — watch the ranking
+            shift from developed, income-ready parcels to vacant, high-potential
+            land. Same engine, opposite output, driven by the mandate.
+          </p>
+
           {loading && (
             <div style={{ display: "grid", gap: 8 }}>
               <p style={{ fontSize: 13, color: "var(--text-dim)" }}>
@@ -442,16 +449,11 @@ export default function Home() {
           <p style={{ fontSize: 14, color: "var(--text-dim)", lineHeight: 1.55 }}>
             Select a mandate above, then run a match. ParcelFit scores every parcel
             in the dataset, ranks the top eight, and writes a committee briefing
-            you can audit factor by factor.
-          </p>
-          <p style={{ fontSize: 13, color: "var(--text-faint)" }}>
-            New here? Click{" "}
+            you can audit factor by factor. Or click{" "}
             <strong style={{ color: "var(--sand)", fontWeight: 600 }}>
               Try demo ({DEMO_INVESTOR_ID})
             </strong>{" "}
-            for a balanced, short-horizon mandate — then switch to{" "}
-            <span className="mono">{COMPARE_INVESTOR_ID}</span> to see vacant
-            high-potential parcels rise for an aggressive profile.
+            to start with a sample mandate.
           </p>
         </div>
       )}
